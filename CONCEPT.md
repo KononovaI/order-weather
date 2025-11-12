@@ -26,5 +26,5 @@ orderweather/
 └── README.md         # Main info of project
 ├── CONCEPT.md        # Project idea and API description
 ├── .gitignore        # Contains `.env`, `node_modules/`
-├── .env              # 
+├── .env              # Secreat info storage
 ├── .env.example      # Sample with variable names, no real values
