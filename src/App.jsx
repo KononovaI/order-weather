@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import './index.css';
 import { weatherService } from './services/weatherService';
+import MapLocationPicker from './mapLocationPicker';
+import logoImage from './assets/weather-wizard-logo.jpg';
 
 function App() {
   // State
@@ -14,6 +16,8 @@ function App() {
   const [error, setError] = useState('');
   const [isSimulation, setIsSimulation] = useState(false);
   const [simulationData, setSimulationData] = useState(null);
+  const [showMap, setShowMap] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
   // Order Form State
   const [desiredTemp, setDesiredTemp] = useState('');
@@ -32,6 +36,8 @@ function App() {
       }
 
       const desiredTempParam = params.get('desiredTemp');
+      const tokensParam = params.get('tokens');
+      
       if (desiredTempParam) {
         data.originalForecast.temp = desiredTempParam;
         
@@ -44,8 +50,39 @@ function App() {
         }
       }
       
+      // Set refund amount from URL parameter
+      if (tokensParam) {
+        data.refundAmount = parseInt(tokensParam);
+      }
+      
       setSimulationData(data);
     }
+
+    // Get user's geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation([latitude, longitude]);
+
+          // Reverse geocode to get city name
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`
+            );
+            const data = await response.json();
+            const cityName = data.address?.city || data.address?.town || data.address?.village || data.display_name.split(',')[0];
+            setCity(cityName);
+          } catch (error) {
+            console.error('Error getting city name:', error);
+          }
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+        }
+      );
+    }
+
   }, []);
 
   const handleCheckCurrent = async () => {
@@ -100,19 +137,27 @@ function App() {
     const isSuccess = forecastTemp >= target;
 
     if (isSuccess) {
-      setOrderStatus(`Order Successful! Forecast (${forecastTemp}°C) meets your criteria. Payment kept.`);
+      setOrderStatus(`Order Successful!`);
     } else {
       // Refund
       setTimeout(() => {
         setTokens(prev => prev + parseInt(tokensToSpend));
-        setOrderStatus(`Order compleated!`);
+        setOrderStatus(`Order Successful!`);
       }, 1500); // Simulate processing delay
       setOrderStatus('Processing...');
     }
   };
 
+  const handleMapLocationSelect = (location) => {
+    if (location && location.placeName) {
+      // Extract city name from place name (usually first part before comma)
+      const cityMatch = location.placeName.split(',')[0];
+      setCity(cityMatch.trim());
+    }
+  };
+
   const openTimeMachine = () => {
-    window.open(`/?simulation=refund&date=${selectedDate}&desiredTemp=${desiredTemp}`, '_blank');
+    window.open(`/?simulation=refund&date=${selectedDate}&desiredTemp=${desiredTemp}&tokens=${tokensToSpend}`, '_blank');
   };
 
   if (isSimulation && simulationData) { /* Here is content of simulation page */
@@ -140,6 +185,7 @@ function App() {
 
   return (
     <div className="container">
+			<img src={logoImage} alt="Weather Wizard Logo" className="app-logo" />
       <h1>Weather Wizard</h1>
       
       <div className="tokens-display">
@@ -149,7 +195,7 @@ function App() {
       <section className="card">
         <h2>1. Select City</h2>
         <div className="input-group">
-          <input 
+          <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
             placeholder="Enter city (e.g., London)" 
@@ -159,6 +205,20 @@ function App() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+
+        <button
+          className={`map-toggle-btn ${showMap ? 'active' : ''}`}
+          onClick={() => setShowMap(!showMap)}
+        >
+          {showMap ? '✕ Hide Map' : '📍 Select on Map'}
+        </button>
+
+        {showMap && (
+          <MapLocationPicker
+            onLocationSelect={handleMapLocationSelect}
+            initialCenter={userLocation}
+          />
+        )}
 
         {weather && (
           <div className="weather-info">
