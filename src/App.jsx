@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import './index.css';
 import { weatherService } from './services/weatherService';
+import MapLocationPicker from './MapLocationPicker';
+import logoImage from './assets/weather-wizard-logo.jpg';
 
 function App() {
   // State
@@ -14,6 +16,8 @@ function App() {
   const [error, setError] = useState('');
   const [isSimulation, setIsSimulation] = useState(false);
   const [simulationData, setSimulationData] = useState(null);
+  const [showMap, setShowMap] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
   // Order Form State
   const [desiredTemp, setDesiredTemp] = useState('');
@@ -45,6 +49,31 @@ function App() {
       }
       
       setSimulationData(data);
+    }
+
+    // Get user's geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation([latitude, longitude]);
+
+          // Reverse geocode to get city name
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`
+            );
+            const data = await response.json();
+            const cityName = data.address?.city || data.address?.town || data.address?.village || data.display_name.split(',')[0];
+            setCity(cityName);
+          } catch (error) {
+            console.error('Error getting city name:', error);
+          }
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+        }
+      );
     }
   }, []);
 
@@ -87,7 +116,7 @@ function App() {
 
     // Find forecast for selected date
     const dayForecast = forecast.find(f => f.dt_txt.startsWith(selectedDate));
-    
+
     if (!dayForecast) {
       setOrderStatus('No forecast data for selected date.');
       return;
@@ -108,6 +137,14 @@ function App() {
         setOrderStatus(`Order compleated!`);
       }, 1500); // Simulate processing delay
       setOrderStatus('Processing...');
+    }
+  };
+
+  const handleMapLocationSelect = (location) => {
+    if (location && location.placeName) {
+      // Extract city name from place name (usually first part before comma)
+      const cityMatch = location.placeName.split(',')[0];
+      setCity(cityMatch.trim());
     }
   };
 
@@ -140,8 +177,9 @@ function App() {
 
   return (
     <div className="container">
+      <img src={logoImage} alt="Weather Wizard Logo" className="app-logo" />
       <h1>Weather Wizard</h1>
-      
+
       <div className="tokens-display">
         <span>Current balance (tokens): {tokens}</span>
       </div>
@@ -149,16 +187,30 @@ function App() {
       <section className="card">
         <h2>1. Select City</h2>
         <div className="input-group">
-          <input 
+          <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            placeholder="Enter city (e.g., London)" 
+            placeholder="Enter city (e.g., London)"
           />
           <button onClick={handleCheckCurrent} disabled={loading}>
             {loading ? 'Loading...' : 'Check Weather'}
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+
+        <button
+          className={`map-toggle-btn ${showMap ? 'active' : ''}`}
+          onClick={() => setShowMap(!showMap)}
+        >
+          {showMap ? '✕ Hide Map' : '📍 Select on Map'}
+        </button>
+
+        {showMap && (
+          <MapLocationPicker
+            onLocationSelect={handleMapLocationSelect}
+            initialCenter={userLocation}
+          />
+        )}
 
         {weather && (
           <div className="weather-info">
@@ -175,8 +227,8 @@ function App() {
         <>
           <section className="card">
             <h2>2. Select Date</h2>
-            <select 
-              value={selectedDate} 
+            <select
+              value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             >
               {forecast.map(item => (
@@ -190,21 +242,38 @@ function App() {
           <section className="card highlight">
             <h2>3. Order Your Weather</h2>
             <p>Guarantee good weather for {selectedDate}!</p>
-            
+
             <div className="form-grid">
               <div className="form-group">
+
+                <label>Desired Min Temp (°C):</label>
+                <input
+                  type="number"
+                  value={desiredMinTemp}
+                  onChange={(e) => setDesiredMinTemp(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Desired Max Temp (°C):</label>
+                <input
+                  type="number"
+                  value={desiredMaxTemp}
+                  onChange={(e) => setDesiredMaxTemp(e.target.value)}
+
                 <label>Desired Temperature (°C):</label>
                 <input 
                   type="number" 
                   value={desiredTemp}
                   onChange={(e) => setDesiredTemp(e.target.value)}
+
                 />
               </div>
 
               <div className="form-group">
                 <label>Tokens to Spend:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={tokensToSpend}
                   onChange={(e) => setTokensToSpend(e.target.value)}
                 />
