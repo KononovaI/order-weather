@@ -16,8 +16,7 @@ function App() {
   const [simulationData, setSimulationData] = useState(null);
 
   // Order Form State
-  const [desiredMinTemp, setDesiredMinTemp] = useState('');
-  const [desiredMaxTemp, setDesiredMaxTemp] = useState('');
+  const [desiredTemp, setDesiredTemp] = useState('');
   const [tokensToSpend, setTokensToSpend] = useState('');
 
   useEffect(() => {
@@ -25,7 +24,27 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('simulation') === 'refund') {
       setIsSimulation(true);
-      setSimulationData(weatherService.simulateRefundScenario());
+      const data = weatherService.simulateRefundScenario();
+      
+      const dateParam = params.get('date');
+      if (dateParam) {
+        setSelectedDate(dateParam);
+      }
+
+      const desiredTempParam = params.get('desiredTemp');
+      if (desiredTempParam) {
+        data.originalForecast.temp = desiredTempParam;
+        
+        // Check if actual weather meets the order
+        // Actual is hardcoded to 15 in weatherService
+        if (data.actualWeather.temp >= parseFloat(desiredTempParam)) {
+            data.message = "Weather matched your order. Payment kept.";
+            data.refundAmount = 0;
+            data.isSuccess = true;
+        }
+      }
+      
+      setSimulationData(data);
     }
   }, []);
 
@@ -76,10 +95,9 @@ function App() {
 
     // Check conditions
     const forecastTemp = dayForecast.main.temp;
-    const min = desiredMinTemp ? parseFloat(desiredMinTemp) : -Infinity;
-    const max = desiredMaxTemp ? parseFloat(desiredMaxTemp) : Infinity;
+    const target = desiredTemp ? parseFloat(desiredTemp) : -Infinity;
 
-    const isSuccess = forecastTemp >= min && forecastTemp <= max;
+    const isSuccess = forecastTemp >= target;
 
     if (isSuccess) {
       setOrderStatus(`Order Successful! Forecast (${forecastTemp}°C) meets your criteria. Payment kept.`);
@@ -87,30 +105,32 @@ function App() {
       // Refund
       setTimeout(() => {
         setTokens(prev => prev + parseInt(tokensToSpend));
-        setOrderStatus(`Refunded! Forecast (${forecastTemp}°C) does NOT meet criteria. Tokens returned.`);
+        setOrderStatus(`Order compleated!`);
       }, 1500); // Simulate processing delay
       setOrderStatus('Processing...');
     }
   };
 
   const openTimeMachine = () => {
-    window.open('/?simulation=refund', '_blank');
+    window.open(`/?simulation=refund&date=${selectedDate}&desiredTemp=${desiredTemp}`, '_blank');
   };
 
-  if (isSimulation && simulationData) {
+  if (isSimulation && simulationData) { /* Here is content of simulation page */
     return (
       <div className="container simulation-mode">
         <h1>TIME MACHINE: FUTURE VIEW</h1>
         <div className="card">
-          <h2>Date: {simulationData.date}</h2>
-          <div className="alert error">
+          <h2>Date: {selectedDate}</h2>
+          <div className={`alert ${simulationData.isSuccess ? 'success' : 'error'}`}>
             <h3>Weather Report</h3>
             <p>Actual Weather: {simulationData.actualWeather.condition} ({simulationData.actualWeather.temp}°C)</p>
-            <p>Original Forecast: {simulationData.originalForecast.condition} ({simulationData.originalForecast.temp}°C)</p>
+            <p>Ordered Weather: {simulationData.originalForecast.condition} ({simulationData.originalForecast.temp}°C)</p>
           </div>
-          <div className="refund-notice">
+          <div className="refund-notice" style={{ backgroundColor: simulationData.isSuccess ? '#4caf50' : '#ff9800' }}>
             <h3>{simulationData.message}</h3>
-            <p className="token-change">+{simulationData.refundAmount} Tokens</p>
+            {!simulationData.isSuccess && (
+                <p className="token-change">+{simulationData.refundAmount} Tokens</p>
+            )}
           </div>
           <button onClick={() => window.close()}>Return to Present</button>
         </div>
@@ -123,7 +143,7 @@ function App() {
       <h1>Weather Wizard</h1>
       
       <div className="tokens-display">
-        <span>Available Tokens: {tokens}</span>
+        <span>Current balance (tokens): {tokens}</span>
       </div>
 
       <section className="card">
@@ -161,7 +181,7 @@ function App() {
             >
               {forecast.map(item => (
                 <option key={item.dt} value={item.dt_txt.split(' ')[0]}>
-                  {item.dt_txt.split(' ')[0]} ({Math.round(item.main.temp)}°C, {item.weather[0].main})
+                  {item.dt_txt.split(' ')[0]}
                 </option>
               ))}
             </select>
@@ -173,20 +193,11 @@ function App() {
             
             <div className="form-grid">
               <div className="form-group">
-                <label>Desired Min Temp (°C):</label>
+                <label>Desired Temperature (°C):</label>
                 <input 
                   type="number" 
-                  value={desiredMinTemp}
-                  onChange={(e) => setDesiredMinTemp(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Desired Max Temp (°C):</label>
-                <input 
-                  type="number" 
-                  value={desiredMaxTemp}
-                  onChange={(e) => setDesiredMaxTemp(e.target.value)}
+                  value={desiredTemp}
+                  onChange={(e) => setDesiredTemp(e.target.value)}
                 />
               </div>
 
