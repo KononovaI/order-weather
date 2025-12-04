@@ -193,3 +193,7 @@ input, select {
 .error {
   color: #ff4444;
 }
+
+.success {
+  color: #4caf50;
+}
