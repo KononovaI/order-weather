@@ -157,13 +157,13 @@ function MapLocationPicker({ onLocationSelect, initialCenter }) {
         >
           Remove Marker
         </button>
-        <button
+        {/* <button
           onClick={handleExportJSON}
           disabled={!selectedLocation}
           className="map-control-btn export-btn"
         >
           Export JSON
-        </button>
+        </button> */}
       </div>
 
       {selectedLocation && (

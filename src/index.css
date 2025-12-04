@@ -5,7 +5,7 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* background-color: #242424; */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -66,7 +66,7 @@ button:focus-visible {
 
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
+    color: #6b54b5;
     background-color: #ffffff;
   }
 
@@ -131,7 +131,7 @@ select {
   input,
   select {
     background-color: white;
-    color: black;
+    color: #666565;
   }
 }
 
@@ -189,7 +189,7 @@ select {
 }
 
 .simulation-mode {
-  background-color: #2a0a2a;
+  background-color: #72f3f7;
   min-height: 100vh;
   width: 100%;
 }
