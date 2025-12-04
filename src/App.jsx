@@ -261,12 +261,29 @@ function App() {
                   value={desiredMaxTemp}
                   onChange={(e) => setDesiredMaxTemp(e.target.value)}
 
+
+                <label>Desired Min Temp (°C):</label>
+                <input
+                  type="number"
+                  value={desiredMinTemp}
+                  onChange={(e) => setDesiredMinTemp(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Desired Max Temp (°C):</label>
+                <input
+                  type="number"
+                  value={desiredMaxTemp}
+                  onChange={(e) => setDesiredMaxTemp(e.target.value)}
+
                 <label>Desired Temperature (°C):</label>
                 <input 
                   type="number" 
                   value={desiredTemp}
                   onChange={(e) => setDesiredTemp(e.target.value)}
 
+                />
                 />
               </div>
 
