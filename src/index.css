@@ -182,10 +182,29 @@ select {
   font-size: 1.2em;
   border: none;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  animation: pulsate 1.5s infinite ease-in-out;
+}
+
+@keyframes pulsate {
+  0% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); }
+  50% { transform: scale(1.08); box-shadow: 0 8px 25px rgba(255, 0, 204, 0.6); }
+  100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); }
 }
 
 .time-machine-btn:hover {
-  transform: scale(1.05);
+  transform: scale(1.1);
+}
+
+.status-message {
+  margin-top: 1rem;
+  font-weight: bold;
+  color: #4caf50;
+  opacity: 1;
+  transition: opacity 1s ease-in-out;
+}
+
+.status-message.fade-out {
+  opacity: 0;
 }
 
 .simulation-mode {
