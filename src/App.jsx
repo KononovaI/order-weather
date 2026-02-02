@@ -153,15 +153,15 @@ function App() {
   const handleOrder = () => {
     // Validate all required fields
     if (!selectedDate) {
-      setOrderStatus('Please select a date.');
+      setOrderStatus('Please select the date!');
       return;
     }
     if (!desiredTemp || desiredTemp === '') {
-      setOrderStatus('Please enter desired temperature.');
+      setOrderStatus('Please enter desired temperature!');
       return;
     }
     if (!desiredConditions || desiredConditions === '') {
-      setOrderStatus('Please select desired conditions.');
+      setOrderStatus('Please select desired conditions!');
       return;
     }
     if (!tokensToSpend || tokensToSpend <= 0) {
@@ -178,6 +178,22 @@ function App() {
 
     setOrderPlaced(true);
     setOrderStatus('Order successful!');
+
+    // Start fade out after 4 seconds
+    setTimeout(() => {
+      setOrderStatus('Order successful! fade-out');
+    }, 2000);
+
+    // Completely remove after 5 seconds
+    setTimeout(() => {
+      setOrderStatus('');
+    }, 3000);
+
+    // Clear form fields
+    setSelectedDate('');
+    setDesiredTemp('');
+    setDesiredConditions('');
+    setTokensToSpend('');
   };
 
   const handleMapLocationSelect = (location) => {
@@ -339,7 +355,11 @@ function App() {
               Place Order
             </button>
 
-            {orderStatus && <p className="status-message">{orderStatus}</p>}
+            {orderStatus && (
+              <p className={`status-message ${orderStatus.includes('fade-out') ? 'fade-out' : ''}`}>
+                {orderStatus.replace(' fade-out', '')}
+              </p>
+            )}
           </section>
         </>
         ) : null;
