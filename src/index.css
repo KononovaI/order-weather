@@ -174,7 +174,7 @@ select {
   background-color: #535bf2;
 }
 
-.time-machine-btn {
+.fancy-btn {
   background: linear-gradient(45deg, #ff00cc, #3333ff);
   color: white;
   font-weight: bold;
@@ -182,6 +182,16 @@ select {
   font-size: 1.2em;
   border: none;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: transform 0.2s;
+}
+
+.fancy-btn:hover {
+  transform: scale(1.05);
+}
+
+.pulsate {
   animation: pulsate 1.5s infinite ease-in-out;
 }
 
@@ -191,14 +201,14 @@ select {
   100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); }
 }
 
-.time-machine-btn:hover {
+.pulsate:hover {
   transform: scale(1.1);
 }
 
 .status-message {
   margin-top: 1rem;
   font-weight: bold;
-  color: #4caf50;
+  color: #8b4caf;
   opacity: 1;
   transition: opacity 1s ease-in-out;
 }

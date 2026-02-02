@@ -247,7 +247,7 @@ function App() {
             onChange={(e) => setCity(e.target.value)}
             placeholder="Enter city (e.g., London)" 
           />
-          <button className="time-machine-btn" onClick={handleCheckCurrent} disabled={loading}>
+          <button className="fancy-btn" onClick={handleCheckCurrent} disabled={loading}>
             {loading ? 'Loading...' : 'Check Weather'}
           </button>
         </div>
@@ -367,7 +367,7 @@ function App() {
 
       {orderPlaced && (
         <section className="time-machine-section">
-          <button className="time-machine-btn" onClick={openTimeMachine}>
+          <button className="fancy-btn pulsate" onClick={openTimeMachine}>
             TIME MACHINE 🕒
           </button>
         </section>
