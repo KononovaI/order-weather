@@ -1,17 +1,18 @@
 const API_KEY = import.meta.env.OPENWEATHER_API_KEY || import.meta.env.VITE_OPENWEATHER_API_KEY;
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 
 export const weatherService = {
   async getCurrentWeather(city) {
     if (!API_KEY) throw new Error('API Key is missing');
-    const response = await fetch(`${BASE_URL}/weather?q=${city}&units=metric&appid=${API_KEY}`);
+    const response = await fetch(`${BASE_URL}/weather?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`);
     if (!response.ok) throw new Error('City not found');
     return response.json();
   },
 
   async getForecast(city) {
     if (!API_KEY) throw new Error('API Key is missing');
-    const response = await fetch(`${BASE_URL}/forecast?q=${city}&units=metric&appid=${API_KEY}`);
+    const response = await fetch(`${BASE_URL}/forecast?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`);
     if (!response.ok) throw new Error('City not found');
     const data = await response.json();
     
@@ -30,6 +31,41 @@ export const weatherService = {
     }
     
     return dailyForecasts;
+  },
+
+  /**
+   * Reverse geocode coordinates to get city name.
+   * Uses OpenStreetMap Nominatim API.
+   * 
+   * @param {number} lat - Latitude
+   * @param {number} lon - Longitude
+   * @returns {Promise<string|null>} - City name or null on error
+   */
+  async reverseGeocode(lat, lon) {
+    try {
+      const response = await fetch(
+        `${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`
+      );
+      
+      if (!response.ok) {
+        console.error('Geocoding request failed:', response.status);
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      // Try to extract city name from various address fields
+      const cityName = data.address?.city 
+        || data.address?.town 
+        || data.address?.village 
+        || data.address?.municipality
+        || data.display_name?.split(',')[0];
+      
+      return cityName || null;
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      return null;
+    }
   },
 
   simulateRefundScenario() {
@@ -53,3 +89,4 @@ export const weatherService = {
     };
   }
 };
+

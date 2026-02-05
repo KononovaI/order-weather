@@ -1,32 +1,83 @@
 import { useState, useEffect } from 'react';
 import './index.css';
 import { weatherService } from './services/weatherService';
+import { evaluateOrder, validateOrderForm } from './services/orderEvaluator';
 import MapLocationPicker from './MapLocationPicker';
 import logoImage from './assets/weather-wizard-logo.jpg';
 
 function App() {
-  // State
-  const [city, setCity] = useState('');
-  const [weather, setWeather] = useState(null);
-  const [forecast, setForecast] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('');
+  // ============================================
+  // CONSOLIDATED STATE (Phase 1.1 Refactoring)
+  // ============================================
+
+  // 1. WEATHER DATA - city, current weather, forecast, user location
+  const [weatherData, setWeatherData] = useState({
+    city: '',
+    current: null,
+    forecast: [],
+    userLocation: null,
+  });
+
+  // 2. ORDER FORM - all order-related inputs
+  const [orderForm, setOrderForm] = useState({
+    selectedDate: '',
+    desiredTemp: '',
+    desiredConditions: '',
+    tokensToSpend: '',
+  });
+
+  // 3. UI STATE - visual/interaction state
+  const [uiState, setUiState] = useState({
+    showMap: false,
+    orderPlaced: false,
+    orderStatus: '',
+  });
+
+  // 4. ASYNC STATE - loading indicators and errors
+  const [asyncState, setAsyncState] = useState({
+    isLoading: false,
+    error: '',
+  });
+
+  // 5. SIMULATION STATE - time machine mode
+  const [simulation, setSimulation] = useState({
+    isActive: false,
+    data: null,
+  });
+
+  // 6. TOKENS - separate for localStorage sync
   const [tokens, setTokens] = useState(() => {
     const savedTokens = localStorage.getItem('weatherWizardTokens');
     return savedTokens ? parseInt(savedTokens) : 100;
   });
-  const [orderStatus, setOrderStatus] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [isSimulation, setIsSimulation] = useState(false);
-  const [simulationData, setSimulationData] = useState(null);
-  const [showMap, setShowMap] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
 
-  // Order Form State
-  const [desiredTemp, setDesiredTemp] = useState('');
-  const [desiredConditions, setDesiredConditions] = useState('');
-  const [tokensToSpend, setTokensToSpend] = useState('');
-  const [orderPlaced, setOrderPlaced] = useState(false);
+  // ============================================
+  // STATE UPDATE HELPERS
+  // ============================================
+
+  const updateWeatherData = (updates) => {
+    setWeatherData(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateOrderForm = (updates) => {
+    setOrderForm(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateUiState = (updates) => {
+    setUiState(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateAsyncState = (updates) => {
+    setAsyncState(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateSimulation = (updates) => {
+    setSimulation(prev => ({ ...prev, ...updates }));
+  };
+
+  // ============================================
+  // EFFECTS
+  // ============================================
 
   // Save tokens to localStorage whenever they change
   useEffect(() => {
@@ -37,12 +88,12 @@ function App() {
     // Check for simulation mode
     const params = new URLSearchParams(window.location.search);
     if (params.get('simulation') === 'refund') {
-      setIsSimulation(true);
+      updateSimulation({ isActive: true });
       const data = weatherService.simulateRefundScenario();
       
       const dateParam = params.get('date');
       if (dateParam) {
-        setSelectedDate(dateParam);
+        updateOrderForm({ selectedDate: dateParam });
       }
 
       const desiredTempParam = params.get('desiredTemp');
@@ -57,41 +108,29 @@ function App() {
         data.originalForecast.condition = desiredConditionsParam;
       }
       
-      // Check if actual weather meets the order
-      // Actual is hardcoded to 15°C and 'Rain' in weatherService
-      const tempMatches = data.actualWeather.temp >= parseFloat(desiredTempParam || -Infinity);
-      const conditionMatches = !desiredConditionsParam || data.actualWeather.condition === desiredConditionsParam;
+      // Use pure function to evaluate order (Phase 1.2)
+      const evaluation = evaluateOrder(
+        { desiredTemp: desiredTempParam, desiredCondition: desiredConditionsParam },
+        { temp: data.actualWeather.temp, condition: data.actualWeather.condition }
+      );
       
-      if (tempMatches && conditionMatches) {
-        data.message = "Weather matched your order. Payment kept.";
-        data.refundAmount = 0;
-        data.isSuccess = true;
-        // No refund, tokens stay deducted
-      } else {
-        const reason = !tempMatches ? 'temperature' : 'weather condition';
-        data.message = `Refund Processed! The ${reason} did not match your order.`;
-        data.isSuccess = false;
-        
-        // Update parent window's tokens if this is a popup
-        if (window.opener && tokensParam) {
-          try {
-            const currentTokens = parseInt(localStorage.getItem('weatherWizardTokens') || '100');
-            const newTokens = currentTokens + parseInt(tokensParam);
-            localStorage.setItem('weatherWizardTokens', newTokens.toString());
-            // Trigger storage event for parent window
-            window.opener.postMessage({ type: 'TOKEN_UPDATE', tokens: newTokens }, '*');
-          } catch (error) {
-            console.error('Error updating parent tokens:', error);
-          }
+      data.message = evaluation.message;
+      data.isSuccess = evaluation.isSuccess;
+      data.refundAmount = evaluation.isSuccess ? 0 : parseInt(tokensParam || 0);
+      
+      // Handle refund for popup window
+      if (!evaluation.isSuccess && window.opener && tokensParam) {
+        try {
+          const currentTokens = parseInt(localStorage.getItem('weatherWizardTokens') || '100');
+          const newTokens = currentTokens + parseInt(tokensParam);
+          localStorage.setItem('weatherWizardTokens', newTokens.toString());
+          window.opener.postMessage({ type: 'TOKEN_UPDATE', tokens: newTokens }, '*');
+        } catch (error) {
+          console.error('Error updating parent tokens:', error);
         }
       }
       
-      // Set refund amount from URL parameter
-      if (tokensParam) {
-        data.refundAmount = parseInt(tokensParam);
-      }
-      
-      setSimulationData(data);
+      updateSimulation({ data });
     }
 
     // Listen for token updates from simulation window
@@ -107,18 +146,12 @@ function App() {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          setUserLocation([latitude, longitude]);
+          updateWeatherData({ userLocation: [latitude, longitude] });
 
-          // Reverse geocode to get city name
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`
-            );
-            const data = await response.json();
-            const cityName = data.address?.city || data.address?.town || data.address?.village || data.display_name.split(',')[0];
-            setCity(cityName);
-          } catch (error) {
-            console.error('Error getting city name:', error);
+          // Reverse geocode to get city name (Phase 1.3 - use service layer)
+          const cityName = await weatherService.reverseGeocode(latitude, longitude);
+          if (cityName) {
+            updateWeatherData({ city: cityName });
           }
         },
         (error) => {
@@ -132,96 +165,94 @@ function App() {
     };
   }, []);
 
+  // ============================================
+  // EVENT HANDLERS
+  // ============================================
+
   const handleCheckCurrent = async () => {
-    if (!city) return;
-    setLoading(true);
-    setError('');
+    if (!weatherData.city) return;
+    
+    updateAsyncState({ isLoading: true, error: '' });
+    
     try {
-      const data = await weatherService.getCurrentWeather(city);
-      setWeather(data);
-      // Also fetch forecast when city changes
-      const forecastData = await weatherService.getForecast(city);
-      setForecast(forecastData);
-      // Don't auto-select date - user must choose
+      const data = await weatherService.getCurrentWeather(weatherData.city);
+      updateWeatherData({ current: data });
+      
+      const forecastData = await weatherService.getForecast(weatherData.city);
+      updateWeatherData({ forecast: forecastData });
     } catch (err) {
-      setError(err.message);
+      updateAsyncState({ error: err.message });
     } finally {
-      setLoading(false);
+      updateAsyncState({ isLoading: false });
     }
   };
 
   const handleOrder = () => {
-    // Validate all required fields
-    if (!selectedDate) {
-      setOrderStatus('Please select the date!');
-      return;
-    }
-    if (!desiredTemp || desiredTemp === '') {
-      setOrderStatus('Please enter desired temperature!');
-      return;
-    }
-    if (!desiredConditions || desiredConditions === '') {
-      setOrderStatus('Please select desired conditions!');
-      return;
-    }
-    if (!tokensToSpend || tokensToSpend <= 0) {
-      setOrderStatus('Please enter a valid token amount.');
-      return;
-    }
-    if (tokensToSpend > tokens) {
-      setOrderStatus('Not enough tokens!');
+    // Validate using pure function (Phase 1.2)
+    const validation = validateOrderForm(orderForm, tokens);
+    
+    if (!validation.isValid) {
+      updateUiState({ orderStatus: validation.firstError.message });
       return;
     }
 
     // Deduct tokens when placing order
-    setTokens(prev => prev - parseInt(tokensToSpend));
+    setTokens(prev => prev - parseInt(orderForm.tokensToSpend));
 
-    setOrderPlaced(true);
-    setOrderStatus('Order successful!');
+    updateUiState({ orderPlaced: true, orderStatus: 'Order successful!' });
 
-    // Start fade out after 4 seconds
+    // Start fade out after 2 seconds
     setTimeout(() => {
-      setOrderStatus('Order successful! fade-out');
+      updateUiState({ orderStatus: 'Order successful! fade-out' });
     }, 2000);
 
-    // Completely remove after 5 seconds
+    // Completely remove after 3 seconds
     setTimeout(() => {
-      setOrderStatus('');
+      updateUiState({ orderStatus: '' });
     }, 3000);
 
     // Clear form fields
-    setSelectedDate('');
-    setDesiredTemp('');
-    setDesiredConditions('');
-    setTokensToSpend('');
+    updateOrderForm({
+      selectedDate: '',
+      desiredTemp: '',
+      desiredConditions: '',
+      tokensToSpend: '',
+    });
   };
 
   const handleMapLocationSelect = (location) => {
     if (location && location.placeName) {
-      // Extract city name from place name (usually first part before comma)
       const cityMatch = location.placeName.split(',')[0];
-      setCity(cityMatch.trim());
+      updateWeatherData({ city: cityMatch.trim() });
     }
   };
 
   const openTimeMachine = () => {
-    window.open(`/?simulation=refund&date=${selectedDate}&desiredTemp=${desiredTemp}&desiredConditions=${desiredConditions}&tokens=${tokensToSpend}`, '_blank');
+    const { selectedDate, desiredTemp, desiredConditions, tokensToSpend } = orderForm;
+    window.open(
+      `/?simulation=refund&date=${selectedDate}&desiredTemp=${desiredTemp}&desiredConditions=${desiredConditions}&tokens=${tokensToSpend}`,
+      '_blank'
+    );
   };
 
-  if (isSimulation && simulationData) { /* Here is content of simulation page */
+  // ============================================
+  // RENDER: SIMULATION MODE
+  // ============================================
+
+  if (simulation.isActive && simulation.data) {
     return (
       <div className="container simulation-mode">
         <h1>TIME MACHINE: FUTURE VIEW</h1>
         <div className="card">
-          <h2>Weather Report: {selectedDate}</h2>
-          <div className={`alert ${simulationData.isSuccess ? 'success' : 'error'}`}>
-            <h3>Actual Weather: {simulationData.actualWeather.condition} ({simulationData.actualWeather.temp}°C)</h3>
-            <h3>Ordered Weather: {simulationData.originalForecast.condition} ({simulationData.originalForecast.temp}°C)</h3>
+          <h2>Weather Report: {orderForm.selectedDate}</h2>
+          <div className={`alert ${simulation.data.isSuccess ? 'success' : 'error'}`}>
+            <h3>Actual Weather: {simulation.data.actualWeather.condition} ({simulation.data.actualWeather.temp}°C)</h3>
+            <h3>Ordered Weather: {simulation.data.originalForecast.condition} ({simulation.data.originalForecast.temp}°C)</h3>
           </div>
-          <div className="refund-notice" style={{ backgroundColor: simulationData.isSuccess ? '#4caf50' : '#ff9800' }}>
-            <h3>{simulationData.message}</h3>
-            {!simulationData.isSuccess && (
-                <p className="token-change">+{simulationData.refundAmount} Tokens</p>
+          <div className="refund-notice" style={{ backgroundColor: simulation.data.isSuccess ? '#4caf50' : '#ff9800' }}>
+            <h3>{simulation.data.message}</h3>
+            {!simulation.data.isSuccess && (
+              <p className="token-change">+{simulation.data.refundAmount} Tokens</p>
             )}
           </div>
           <button onClick={() => window.close()} style={{ marginTop: '2rem' }}>Return to Present</button>
@@ -230,73 +261,89 @@ function App() {
     );
   }
 
+  // ============================================
+  // RENDER: MAIN APP
+  // ============================================
+
+  // Filter forecast to show only future dates
+  const getFutureForecast = () => {
+    if (weatherData.forecast.length === 0) return [];
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    return weatherData.forecast.filter(item => {
+      const forecastDate = new Date(item.dt_txt.split(' ')[0]);
+      return forecastDate >= tomorrow;
+    });
+  };
+
+  const futureForecast = getFutureForecast();
+
   return (
     <div className="container">
-			<img src={logoImage} alt="Weather Wizard Logo" className="app-logo" />
+      <img src={logoImage} alt="Weather Wizard Logo" className="app-logo" />
       <h1>Weather Wizard</h1>
       
       <div className="tokens-display">
         <h3>Current balance (tokens): {tokens}</h3>
       </div>
 
+      {/* SECTION 1: City Selection */}
       <section className="card">
         <h2>1. Select City</h2>
         <div className="input-group">
           <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
+            value={weatherData.city}
+            onChange={(e) => updateWeatherData({ city: e.target.value })}
             placeholder="Enter city (e.g., London)" 
           />
-          <button className="fancy-btn" onClick={handleCheckCurrent} disabled={loading}>
-            {loading ? 'Loading...' : 'Check Weather'}
+          <button 
+            className="fancy-btn" 
+            onClick={handleCheckCurrent} 
+            disabled={asyncState.isLoading}
+          >
+            {asyncState.isLoading ? 'Loading...' : 'Check Weather'}
           </button>
         </div>
-        {error && <p className="error">{error}</p>}
+        
+        {asyncState.error && <p className="error">{asyncState.error}</p>}
 
         <button
-          className={`map-toggle-btn ${showMap ? 'active' : ''}`}
-          onClick={() => setShowMap(!showMap)}
+          className={`map-toggle-btn ${uiState.showMap ? 'active' : ''}`}
+          onClick={() => updateUiState({ showMap: !uiState.showMap })}
         >
-          {showMap ? '✕ Hide Map' : '📍 Select on Map'}
+          {uiState.showMap ? '✕ Hide Map' : '📍 Select on Map'}
         </button>
 
-        {showMap && (
+        {uiState.showMap && (
           <MapLocationPicker
             onLocationSelect={handleMapLocationSelect}
-            initialCenter={userLocation}
+            initialCenter={weatherData.userLocation}
           />
         )}
 
-        {weather && (
+        {weatherData.current && (
           <div className="weather-info">
-            <h3>Current Weather in {weather.name}</h3>
+            <h3>Current Weather in {weatherData.current.name}</h3>
             <div className="weather-stat">
-              <span className="temp">{Math.round(weather.main.temp)}°C</span>
-              <span className="condition">{weather.weather[0].main}</span>
+              <span className="temp">{Math.round(weatherData.current.main.temp)}°C</span>
+              <span className="condition">{weatherData.current.weather[0].main}</span>
             </div>
           </div>
         )}
       </section>
 
-      {forecast.length > 0 && (() => {
-        // Filter to show only future dates (tomorrow onwards)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        const futureForecast = forecast.filter(item => {
-          const forecastDate = new Date(item.dt_txt.split(' ')[0]);
-          return forecastDate >= tomorrow;
-        });
-        
-        return futureForecast.length > 0 ? (
+      {/* SECTION 2 & 3: Date Selection and Order Form */}
+      {futureForecast.length > 0 && (
         <>
           <section className="card">
             <h2>2. Select Date</h2>
             <select 
-              value={selectedDate} 
-              onChange={(e) => setSelectedDate(e.target.value)}
+              value={orderForm.selectedDate} 
+              onChange={(e) => updateOrderForm({ selectedDate: e.target.value })}
             >
               <option value="" disabled>Choose the date</option>
               {futureForecast.map(item => (
@@ -309,24 +356,24 @@ function App() {
 
           <section className="card highlight">
             <h2>3. Order Your Weather</h2>
-            <p>Guarantee good weather for {selectedDate || 'your selected date'}!</p>
+            <p>Guarantee good weather for {orderForm.selectedDate || 'your selected date'}!</p>
             
             <div className="form-grid">
               <div className="form-group">
                 <label>Desired Temperature (°C):</label>
                 <input 
                   type="number" 
-                  value={desiredTemp}
-                  onChange={(e) => setDesiredTemp(e.target.value)}
+                  value={orderForm.desiredTemp}
+                  onChange={(e) => updateOrderForm({ desiredTemp: e.target.value })}
                   placeholder="Type the desired temperature"
                 />
               </div>
 
-							<div className="form-group">
+              <div className="form-group">
                 <label>Desired Conditions:</label>
                 <select 
-                  value={desiredConditions}
-                  onChange={(e) => setDesiredConditions(e.target.value)}
+                  value={orderForm.desiredConditions}
+                  onChange={(e) => updateOrderForm({ desiredConditions: e.target.value })}
                 >
                   <option value="" disabled>Choose from the list</option>
                   <option value="Clear">Clear</option>
@@ -344,8 +391,8 @@ function App() {
                 <label>Tokens to Spend:</label>
                 <input 
                   type="number" 
-                  value={tokensToSpend}
-                  onChange={(e) => setTokensToSpend(e.target.value)}
+                  value={orderForm.tokensToSpend}
+                  onChange={(e) => updateOrderForm({ tokensToSpend: e.target.value })}
                   placeholder="Type amount"
                 />
               </div>
@@ -355,17 +402,17 @@ function App() {
               Place Order
             </button>
 
-            {orderStatus && (
-              <p className={`status-message ${orderStatus.includes('fade-out') ? 'fade-out' : ''}`}>
-                {orderStatus.replace(' fade-out', '')}
+            {uiState.orderStatus && (
+              <p className={`status-message ${uiState.orderStatus.includes('fade-out') ? 'fade-out' : ''}`}>
+                {uiState.orderStatus.replace(' fade-out', '')}
               </p>
             )}
           </section>
         </>
-        ) : null;
-      })()}
+      )}
 
-      {orderPlaced && (
+      {/* TIME MACHINE BUTTON */}
+      {uiState.orderPlaced && (
         <section className="time-machine-section">
           <button className="fancy-btn pulsate" onClick={openTimeMachine}>
             TIME MACHINE 🕒
