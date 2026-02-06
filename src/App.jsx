@@ -39,6 +39,7 @@ function App() {
     showMap: false,
     orderPlaced: false,
     orderStatus: '',
+    lastOrder: null, // To keep track of data for Time Machine after form is cleared
   });
 
   // 4. ASYNC STATE - logical groupings for loading and errors
@@ -99,37 +100,47 @@ function App() {
     // Check for simulation mode
     const params = new URLSearchParams(window.location.search);
     if (params.get('simulation') === 'refund') {
-      updateSimulation({ isActive: true });
-      const data = weatherService.simulateRefundScenario();
+      const scenarioData = weatherService.simulateRefundScenario();
       
+      // Explicitly pull parameters from URL
       const dateParam = params.get('date');
-      if (dateParam) {
-        updateOrderForm({ selectedDate: dateParam });
-      }
-
-      const desiredTempParam = params.get('desiredTemp');
-      const desiredConditionsParam = params.get('desiredConditions');
+      const tempParam = params.get('desiredTemp');
+      const condParam = params.get('desiredConditions');
       const tokensParam = params.get('tokens');
-      
-      if (desiredTempParam) {
-        data.originalForecast.temp = desiredTempParam;
-      }
-      
-      if (desiredConditionsParam) {
-        data.originalForecast.condition = desiredConditionsParam;
-      }
-      
-      // Use pure function to evaluate order
+
+      // Construct simulation data object - STRICTLY prioritizing URL parameters
+      const simulationData = {
+        ...scenarioData,
+        date: dateParam || scenarioData.date,
+        originalForecast: {
+          temp: tempParam !== null ? tempParam : scenarioData.originalForecast.temp,
+          condition: condParam !== null ? condParam : scenarioData.originalForecast.condition
+        },
+        refundAmount: 0 // Will be set below
+      };
+
+      // Recalculate evaluation with the EXACT parameters from URL
       const evaluation = evaluateOrder(
-        { desiredTemp: desiredTempParam, desiredCondition: desiredConditionsParam },
-        { temp: data.actualWeather.temp, condition: data.actualWeather.condition }
+        { desiredTemp: tempParam, desiredCondition: condParam },
+        { 
+          temp: simulationData.actualWeather.temp, 
+          condition: simulationData.actualWeather.condition 
+        }
       );
       
-      data.message = evaluation.message;
-      data.isSuccess = evaluation.isSuccess;
-      data.refundAmount = evaluation.isSuccess ? 0 : parseInt(tokensParam || 0);
+      simulationData.message = evaluation.message;
+      simulationData.isSuccess = evaluation.isSuccess;
+      simulationData.refundAmount = evaluation.isSuccess ? 0 : parseInt(tokensParam || 0);
       
-      // Handle refund for popup window
+      // Update local form state for UI consistency
+      updateOrderForm({
+        selectedDate: dateParam || '',
+        desiredTemp: tempParam || '',
+        desiredConditions: condParam || '',
+        tokensToSpend: tokensParam || '',
+      });
+
+      // Handle token refund logic
       if (!evaluation.isSuccess && window.opener && tokensParam) {
         try {
           const currentTokens = parseInt(localStorage.getItem('weatherWizardTokens') || '100');
@@ -137,11 +148,11 @@ function App() {
           localStorage.setItem('weatherWizardTokens', newTokens.toString());
           window.opener.postMessage({ type: 'TOKEN_UPDATE', tokens: newTokens }, '*');
         } catch (error) {
-          console.error('Error updating parent tokens:', error);
+          console.error('Simulation: Token update failed', error);
         }
       }
       
-      updateSimulation({ data });
+      updateSimulation({ isActive: true, data: simulationData });
     }
 
     // Listen for token updates from simulation window
@@ -212,7 +223,11 @@ function App() {
     // Deduct tokens when placing order
     setTokens(prev => prev - parseInt(orderForm.tokensToSpend));
 
-    updateUiState({ orderPlaced: true, orderStatus: 'Order successful!' });
+    updateUiState({ 
+      orderPlaced: true, 
+      orderStatus: 'Order successful!',
+      lastOrder: { ...orderForm } // Save data for Time Machine
+    });
     updateAsyncState({ isOrderSubmitting: false });
     
     // Start fade out after 2 seconds
@@ -225,8 +240,8 @@ function App() {
       updateUiState({ orderStatus: '' });
     }, 3000);
 
-    // Clear form fields
-    updateOrderForm({
+    // Clear form fields explicitly
+    setOrderForm({
       selectedDate: '',
       desiredTemp: '',
       desiredConditions: '',
@@ -242,7 +257,8 @@ function App() {
   };
 
   const openTimeMachine = () => {
-    const { selectedDate, desiredTemp, desiredConditions, tokensToSpend } = orderForm;
+    const data = uiState.lastOrder || orderForm;
+    const { selectedDate, desiredTemp, desiredConditions, tokensToSpend } = data;
     window.open(
       `/?simulation=refund&date=${selectedDate}&desiredTemp=${desiredTemp}&desiredConditions=${desiredConditions}&tokens=${tokensToSpend}`,
       '_blank'

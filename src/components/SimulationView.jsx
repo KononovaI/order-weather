@@ -3,14 +3,14 @@
  * Displays the "Time Machine" simulation results page.
  */
 
-function SimulationView({ selectedDate, simulationData, onClose }) {
+function SimulationView({ simulationData, onClose }) {
   if (!simulationData) return null;
 
   return (
     <div className="container simulation-mode">
       <h1>TIME MACHINE: FUTURE VIEW</h1>
       <div className="card">
-        <h2>Weather Report: {selectedDate}</h2>
+        <h2>Weather Report: {simulationData.date}</h2>
         
         <div className={`alert ${simulationData.isSuccess ? 'success' : 'error'}`}>
           <h3>
