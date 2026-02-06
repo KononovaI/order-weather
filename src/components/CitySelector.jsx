@@ -12,7 +12,6 @@ function CitySelector({
   userLocation,
   showMap,
   isLoading,
-  isGeocodingLoading,
   error,
   onCityChange,
   onCheckWeather,
@@ -21,10 +20,7 @@ function CitySelector({
 }) {
   return (
     <section className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>1. Select City</h2>
-        {isGeocodingLoading && <small style={{ color: '#646cff' }}>📍 Detecting location...</small>}
-      </div>
+      <h2>1. Select City</h2>
       
       <div className="input-group">
         <input

@@ -45,7 +45,6 @@ function App() {
   const [asyncState, setAsyncState] = useState({
     isWeatherLoading: false,
     isForecastLoading: false,
-    isGeocodingLoading: false,
     isOrderSubmitting: false,
     error: '',
     errorType: null,
@@ -152,32 +151,6 @@ function App() {
       }
     };
     window.addEventListener('message', handleMessage);
-
-    // Get user's geolocation
-    if (navigator.geolocation) {
-      updateAsyncState({ isGeocodingLoading: true });
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          updateWeatherData({ userLocation: [latitude, longitude] });
-
-          // Reverse geocode to get city name
-          const cityName = await weatherService.reverseGeocode(latitude, longitude);
-          if (cityName) {
-            updateWeatherData({ city: cityName });
-          }
-          updateAsyncState({ isGeocodingLoading: false });
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          updateAsyncState({ 
-            isGeocodingLoading: false,
-            error: 'Geolocation access denied.',
-            errorType: 'geolocation'
-          });
-        }
-      );
-    }
 
     return () => {
       window.removeEventListener('message', handleMessage);
@@ -315,7 +288,6 @@ function App() {
         userLocation={weatherData.userLocation}
         showMap={uiState.showMap}
         isLoading={asyncState.isWeatherLoading}
-        isGeocodingLoading={asyncState.isGeocodingLoading}
         onCityChange={(city) => updateWeatherData({ city })}
         onCheckWeather={handleCheckWeather}
         onToggleMap={() => updateUiState({ showMap: !uiState.showMap })}

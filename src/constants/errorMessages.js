@@ -7,7 +7,6 @@ export const ERROR_TYPES = {
   NETWORK: 'network',
   VALIDATION: 'validation',
   API: 'api',
-  GEOLOCATION: 'geolocation',
   RATE_LIMIT: 'rate_limit',
   NOT_FOUND: 'not_found',
 };
@@ -22,11 +21,6 @@ export const ERROR_MESSAGES = {
     title: 'Service Error', 
     message: 'The weather service is temporarily unavailable. Please try again later.', 
     icon: '⚠️' 
-  },
-  geolocation: { 
-    title: 'Location Denied', 
-    message: 'Please enable location access in your browser or enter city manually.', 
-    icon: '📍' 
   },
   validation: { 
     title: 'Invalid Input', 
