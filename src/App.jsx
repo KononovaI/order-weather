@@ -2,12 +2,20 @@ import { useState, useEffect } from 'react';
 import './index.css';
 import { weatherService } from './services/weatherService';
 import { evaluateOrder, validateOrderForm } from './services/orderEvaluator';
-import MapLocationPicker from './MapLocationPicker';
 import logoImage from './assets/weather-wizard-logo.jpg';
+
+// Phase 4: Sub-components logic decomposition
+import TokenDisplay from './components/TokenDisplay';
+import CitySelector from './components/CitySelector';
+import DateSelector from './components/DateSelector';
+import WeatherOrderForm from './components/WeatherOrderForm';
+import SimulationView from './components/SimulationView';
+import ErrorAlert from './components/ErrorAlert';
+import LoadingSpinner from './components/LoadingSpinner';
 
 function App() {
   // ============================================
-  // CONSOLIDATED STATE (Phase 1.1 Refactoring)
+  // CONSOLIDATED STATE
   // ============================================
 
   // 1. WEATHER DATA - city, current weather, forecast, user location
@@ -37,6 +45,7 @@ function App() {
   const [asyncState, setAsyncState] = useState({
     isLoading: false,
     error: '',
+    errorType: null, // validation, api, network, etc.
   });
 
   // 5. SIMULATION STATE - time machine mode
@@ -108,7 +117,7 @@ function App() {
         data.originalForecast.condition = desiredConditionsParam;
       }
       
-      // Use pure function to evaluate order (Phase 1.2)
+      // Use pure function to evaluate order
       const evaluation = evaluateOrder(
         { desiredTemp: desiredTempParam, desiredCondition: desiredConditionsParam },
         { temp: data.actualWeather.temp, condition: data.actualWeather.condition }
@@ -148,7 +157,7 @@ function App() {
           const { latitude, longitude } = position.coords;
           updateWeatherData({ userLocation: [latitude, longitude] });
 
-          // Reverse geocode to get city name (Phase 1.3 - use service layer)
+          // Reverse geocode to get city name
           const cityName = await weatherService.reverseGeocode(latitude, longitude);
           if (cityName) {
             updateWeatherData({ city: cityName });
@@ -169,30 +178,37 @@ function App() {
   // EVENT HANDLERS
   // ============================================
 
-  const handleCheckCurrent = async () => {
+  const handleCheckWeather = async () => {
     if (!weatherData.city) return;
     
-    updateAsyncState({ isLoading: true, error: '' });
+    updateAsyncState({ isLoading: true, error: '', errorType: null });
     
     try {
-      const data = await weatherService.getCurrentWeather(weatherData.city);
-      updateWeatherData({ current: data });
+      const current = await weatherService.getCurrentWeather(weatherData.city);
+      const forecast = await weatherService.getForecast(weatherData.city);
       
-      const forecastData = await weatherService.getForecast(weatherData.city);
-      updateWeatherData({ forecast: forecastData });
+      updateWeatherData({ current, forecast });
     } catch (err) {
-      updateAsyncState({ error: err.message });
+      updateAsyncState({ 
+        error: err.message, 
+        errorType: err.type || 'api' 
+      });
     } finally {
       updateAsyncState({ isLoading: false });
     }
   };
 
-  const handleOrder = () => {
-    // Validate using pure function (Phase 1.2)
+  const handleOrderSubmit = () => {
+    // Validate using pure function
     const validation = validateOrderForm(orderForm, tokens);
     
     if (!validation.isValid) {
-      updateUiState({ orderStatus: validation.firstError.message });
+      updateAsyncState({ 
+        error: validation.firstError.message, 
+        errorType: 'validation' 
+      });
+      // Clear message after 3 seconds for validation errors
+      setTimeout(() => updateAsyncState({ error: '', errorType: null }), 3000);
       return;
     }
 
@@ -241,23 +257,11 @@ function App() {
 
   if (simulation.isActive && simulation.data) {
     return (
-      <div className="container simulation-mode">
-        <h1>TIME MACHINE: FUTURE VIEW</h1>
-        <div className="card">
-          <h2>Weather Report: {orderForm.selectedDate}</h2>
-          <div className={`alert ${simulation.data.isSuccess ? 'success' : 'error'}`}>
-            <h3>Actual Weather: {simulation.data.actualWeather.condition} ({simulation.data.actualWeather.temp}°C)</h3>
-            <h3>Ordered Weather: {simulation.data.originalForecast.condition} ({simulation.data.originalForecast.temp}°C)</h3>
-          </div>
-          <div className="refund-notice" style={{ backgroundColor: simulation.data.isSuccess ? '#4caf50' : '#ff9800' }}>
-            <h3>{simulation.data.message}</h3>
-            {!simulation.data.isSuccess && (
-              <p className="token-change">+{simulation.data.refundAmount} Tokens</p>
-            )}
-          </div>
-          <button onClick={() => window.close()} style={{ marginTop: '2rem' }}>Return to Present</button>
-        </div>
-      </div>
+      <SimulationView 
+        selectedDate={orderForm.selectedDate}
+        simulationData={simulation.data}
+        onClose={() => window.close()}
+      />
     );
   }
 
@@ -265,153 +269,49 @@ function App() {
   // RENDER: MAIN APP
   // ============================================
 
-  // Filter forecast to show only future dates
-  const getFutureForecast = () => {
-    if (weatherData.forecast.length === 0) return [];
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    return weatherData.forecast.filter(item => {
-      const forecastDate = new Date(item.dt_txt.split(' ')[0]);
-      return forecastDate >= tomorrow;
-    });
-  };
-
-  const futureForecast = getFutureForecast();
-
   return (
     <div className="container">
       <img src={logoImage} alt="Weather Wizard Logo" className="app-logo" />
       <h1>Weather Wizard</h1>
       
-      <div className="tokens-display">
-        <h3>Current balance (tokens): {tokens}</h3>
-      </div>
+      <TokenDisplay tokens={tokens} />
 
-      {/* SECTION 1: City Selection */}
-      <section className="card">
-        <h2>1. Select City</h2>
-        <div className="input-group">
-          <input
-            value={weatherData.city}
-            onChange={(e) => updateWeatherData({ city: e.target.value })}
-            placeholder="Enter city (e.g., London)" 
-          />
-          <button 
-            className="fancy-btn" 
-            onClick={handleCheckCurrent} 
-            disabled={asyncState.isLoading}
-          >
-            {asyncState.isLoading ? 'Loading...' : 'Check Weather'}
-          </button>
-        </div>
-        
-        {asyncState.error && <p className="error">{asyncState.error}</p>}
-
-        <button
-          className={`map-toggle-btn ${uiState.showMap ? 'active' : ''}`}
-          onClick={() => updateUiState({ showMap: !uiState.showMap })}
-        >
-          {uiState.showMap ? '✕ Hide Map' : '📍 Select on Map'}
-        </button>
-
-        {uiState.showMap && (
-          <MapLocationPicker
-            onLocationSelect={handleMapLocationSelect}
-            initialCenter={weatherData.userLocation}
-          />
-        )}
-
-        {weatherData.current && (
-          <div className="weather-info">
-            <h3>Current Weather in {weatherData.current.name}</h3>
-            <div className="weather-stat">
-              <span className="temp">{Math.round(weatherData.current.main.temp)}°C</span>
-              <span className="condition">{weatherData.current.weather[0].main}</span>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* SECTION 2 & 3: Date Selection and Order Form */}
-      {futureForecast.length > 0 && (
-        <>
-          <section className="card">
-            <h2>2. Select Date</h2>
-            <select 
-              value={orderForm.selectedDate} 
-              onChange={(e) => updateOrderForm({ selectedDate: e.target.value })}
-            >
-              <option value="" disabled>Choose the date</option>
-              {futureForecast.map(item => (
-                <option key={item.dt} value={item.dt_txt.split(' ')[0]}>
-                  {item.dt_txt.split(' ')[0]}
-                </option>
-              ))}
-            </select>
-          </section>
-
-          <section className="card highlight">
-            <h2>3. Order Your Weather</h2>
-            <p>Guarantee good weather for {orderForm.selectedDate || 'your selected date'}!</p>
-            
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Desired Temperature (°C):</label>
-                <input 
-                  type="number" 
-                  value={orderForm.desiredTemp}
-                  onChange={(e) => updateOrderForm({ desiredTemp: e.target.value })}
-                  placeholder="Type the desired temperature"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Desired Conditions:</label>
-                <select 
-                  value={orderForm.desiredConditions}
-                  onChange={(e) => updateOrderForm({ desiredConditions: e.target.value })}
-                >
-                  <option value="" disabled>Choose from the list</option>
-                  <option value="Clear">Clear</option>
-                  <option value="Clouds">Clouds</option>
-                  <option value="Rain">Rain</option>
-                  <option value="Drizzle">Drizzle</option>
-                  <option value="Thunderstorm">Thunderstorm</option>
-                  <option value="Snow">Snow</option>
-                  <option value="Mist">Mist</option>
-                  <option value="Fog">Fog</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Tokens to Spend:</label>
-                <input 
-                  type="number" 
-                  value={orderForm.tokensToSpend}
-                  onChange={(e) => updateOrderForm({ tokensToSpend: e.target.value })}
-                  placeholder="Type amount"
-                />
-              </div>
-            </div>
-
-            <button className="primary-btn" onClick={handleOrder}>
-              Place Order
-            </button>
-
-            {uiState.orderStatus && (
-              <p className={`status-message ${uiState.orderStatus.includes('fade-out') ? 'fade-out' : ''}`}>
-                {uiState.orderStatus.replace(' fade-out', '')}
-              </p>
-            )}
-          </section>
-        </>
+      {asyncState.error && (
+        <ErrorAlert 
+          type={asyncState.errorType} 
+          message={asyncState.error} 
+          onDismiss={() => updateAsyncState({ error: '', errorType: null })}
+        />
       )}
 
-      {/* TIME MACHINE BUTTON */}
+      <CitySelector 
+        city={weatherData.city}
+        currentWeather={weatherData.current}
+        userLocation={weatherData.userLocation}
+        showMap={uiState.showMap}
+        isLoading={asyncState.isLoading}
+        onCityChange={(city) => updateWeatherData({ city })}
+        onCheckWeather={handleCheckWeather}
+        onToggleMap={() => updateUiState({ showMap: !uiState.showMap })}
+        onMapLocationSelect={handleMapLocationSelect}
+      />
+
+      <DateSelector 
+        forecast={weatherData.forecast}
+        selectedDate={orderForm.selectedDate}
+        onDateChange={(selectedDate) => updateOrderForm({ selectedDate })}
+      />
+
+      {weatherData.forecast.length > 0 && (
+        <WeatherOrderForm 
+          selectedDate={orderForm.selectedDate}
+          orderForm={orderForm}
+          orderStatus={uiState.orderStatus}
+          onFormChange={updateOrderForm}
+          onSubmit={handleOrderSubmit}
+        />
+      )}
+
       {uiState.orderPlaced && (
         <section className="time-machine-section">
           <button className="fancy-btn pulsate" onClick={openTimeMachine}>

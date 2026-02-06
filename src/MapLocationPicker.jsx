@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { checkRateLimit } from './utils/rateLimiter';
 
 // Fix default marker icon issue with Webpack/Vite
 delete L.Icon.Default.prototype._getIconUrl;
@@ -15,6 +16,7 @@ function MapClickHandler({ onLocationSelect, initialLocation }) {
   const [marker, setMarker] = useState(initialLocation || null);
   const [placeName, setPlaceName] = useState('');
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isThrottled, setIsThrottled] = useState(false);
 
   // Set initial marker if provided
   useEffect(() => {
@@ -28,6 +30,13 @@ function MapClickHandler({ onLocationSelect, initialLocation }) {
 
   // Reverse geocode coordinates to get place name
   const reverseGeocode = useCallback(async (lat, lng) => {
+    // Check geocoding rate limit
+    const rateCheck = checkRateLimit('geocoding');
+    if (!rateCheck.allowed) {
+      console.warn('Geocoding throttled:', rateCheck.message);
+      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+
     setIsGeocoding(true);
     try {
       const response = await fetch(
@@ -46,9 +55,17 @@ function MapClickHandler({ onLocationSelect, initialLocation }) {
     }
   }, []);
 
-  // Handle map clicks
+  // Handle map clicks with rate limiting
   useMapEvents({
     click: async (e) => {
+      // Check map click rate limit (prevents rapid clicking)
+      const rateCheck = checkRateLimit('mapClick');
+      if (!rateCheck.allowed) {
+        setIsThrottled(true);
+        setTimeout(() => setIsThrottled(false), 1000);
+        return;
+      }
+
       const { lat, lng } = e.latlng;
       setMarker({ lat, lng });
       const name = await reverseGeocode(lat, lng);
@@ -56,8 +73,14 @@ function MapClickHandler({ onLocationSelect, initialLocation }) {
     },
   });
 
-  // Handle marker drag
+  // Handle marker drag with rate limiting
   const handleMarkerDrag = useCallback(async (e) => {
+    // Check map click rate limit for drags too
+    const rateCheck = checkRateLimit('mapClick');
+    if (!rateCheck.allowed) {
+      return;
+    }
+
     const { lat, lng } = e.target.getLatLng();
     setMarker({ lat, lng });
     const name = await reverseGeocode(lat, lng);

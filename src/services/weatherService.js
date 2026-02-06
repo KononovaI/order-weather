@@ -1,36 +1,124 @@
+import { checkRateLimit } from '../utils/rateLimiter';
+
 const API_KEY = import.meta.env.OPENWEATHER_API_KEY || import.meta.env.VITE_OPENWEATHER_API_KEY;
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 
+/**
+ * Error types for consistent error handling
+ */
+export const ERROR_TYPES = {
+  RATE_LIMIT: 'rate_limit',
+  NETWORK: 'network',
+  API: 'api',
+  NOT_FOUND: 'not_found',
+};
+
+/**
+ * Create a typed error for better error handling
+ */
+function createError(message, type, details = {}) {
+  const error = new Error(message);
+  error.type = type;
+  error.details = details;
+  return error;
+}
+
 export const weatherService = {
+  /**
+   * Get current weather for a city
+   * @param {string} city - City name
+   * @returns {Promise<Object>} - Weather data
+   * @throws {Error} - With type property for error classification
+   */
   async getCurrentWeather(city) {
-    if (!API_KEY) throw new Error('API Key is missing');
-    const response = await fetch(`${BASE_URL}/weather?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`);
-    if (!response.ok) throw new Error('City not found');
-    return response.json();
+    // Check rate limit before making request
+    const rateCheck = checkRateLimit('weatherApi');
+    if (!rateCheck.allowed) {
+      throw createError(rateCheck.message, ERROR_TYPES.RATE_LIMIT, {
+        waitTimeSeconds: rateCheck.waitTimeSeconds
+      });
+    }
+
+    if (!API_KEY) {
+      throw createError('API Key is missing', ERROR_TYPES.API);
+    }
+
+    try {
+      const response = await fetch(
+        `${BASE_URL}/weather?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`
+      );
+      
+      if (response.status === 429) {
+        throw createError('API rate limit exceeded. Please try again later.', ERROR_TYPES.RATE_LIMIT);
+      }
+      
+      if (!response.ok) {
+        throw createError('City not found', ERROR_TYPES.NOT_FOUND);
+      }
+      
+      return response.json();
+    } catch (error) {
+      // Re-throw typed errors
+      if (error.type) throw error;
+      
+      // Wrap network errors
+      throw createError('Network error. Please check your connection.', ERROR_TYPES.NETWORK);
+    }
   },
 
+  /**
+   * Get weather forecast for a city
+   * @param {string} city - City name
+   * @returns {Promise<Array>} - Array of daily forecasts
+   * @throws {Error} - With type property for error classification
+   */
   async getForecast(city) {
-    if (!API_KEY) throw new Error('API Key is missing');
-    const response = await fetch(`${BASE_URL}/forecast?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`);
-    if (!response.ok) throw new Error('City not found');
-    const data = await response.json();
-    
-    // Process forecast to get one entry per day (approx mid-day)
-    // OpenWeatherMap returns data every 3 hours.
-    const dailyForecasts = [];
-    const seenDates = new Set();
-
-    for (const item of data.list) {
-      const date = item.dt_txt.split(' ')[0];
-      if (!seenDates.has(date)) {
-        seenDates.add(date);
-        dailyForecasts.push(item);
-      }
-      if (dailyForecasts.length === 5) break;
+    // Check rate limit before making request
+    const rateCheck = checkRateLimit('weatherApi');
+    if (!rateCheck.allowed) {
+      throw createError(rateCheck.message, ERROR_TYPES.RATE_LIMIT, {
+        waitTimeSeconds: rateCheck.waitTimeSeconds
+      });
     }
-    
-    return dailyForecasts;
+
+    if (!API_KEY) {
+      throw createError('API Key is missing', ERROR_TYPES.API);
+    }
+
+    try {
+      const response = await fetch(
+        `${BASE_URL}/forecast?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`
+      );
+      
+      if (response.status === 429) {
+        throw createError('API rate limit exceeded. Please try again later.', ERROR_TYPES.RATE_LIMIT);
+      }
+      
+      if (!response.ok) {
+        throw createError('City not found', ERROR_TYPES.NOT_FOUND);
+      }
+      
+      const data = await response.json();
+      
+      // Process forecast to get one entry per day (approx mid-day)
+      const dailyForecasts = [];
+      const seenDates = new Set();
+
+      for (const item of data.list) {
+        const date = item.dt_txt.split(' ')[0];
+        if (!seenDates.has(date)) {
+          seenDates.add(date);
+          dailyForecasts.push(item);
+        }
+        if (dailyForecasts.length === 5) break;
+      }
+      
+      return dailyForecasts;
+    } catch (error) {
+      if (error.type) throw error;
+      throw createError('Network error. Please check your connection.', ERROR_TYPES.NETWORK);
+    }
   },
 
   /**
@@ -42,6 +130,13 @@ export const weatherService = {
    * @returns {Promise<string|null>} - City name or null on error
    */
   async reverseGeocode(lat, lon) {
+    // Check rate limit for geocoding
+    const rateCheck = checkRateLimit('geocoding');
+    if (!rateCheck.allowed) {
+      console.warn('Geocoding rate limited:', rateCheck.message);
+      return null;
+    }
+
     try {
       const response = await fetch(
         `${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`
@@ -89,4 +184,5 @@ export const weatherService = {
     };
   }
 };
+
 
