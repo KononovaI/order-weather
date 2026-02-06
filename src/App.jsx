@@ -12,7 +12,12 @@ import WeatherOrderForm from './components/WeatherOrderForm';
 import SimulationView from './components/SimulationView';
 import ErrorAlert from './components/ErrorAlert';
 import LoadingSpinner from './components/LoadingSpinner';
+import { APP_CONFIG } from './constants/appConstants';
 
+/**
+ * Main Application Component
+ * Manages the global state and provides the main UI structure.
+ */
 function App() {
   // ============================================
   // CONSOLIDATED STATE
@@ -59,8 +64,8 @@ function App() {
 
   // 6. TOKENS - separate for localStorage sync
   const [tokens, setTokens] = useState(() => {
-    const savedTokens = localStorage.getItem('weatherWizardTokens');
-    return savedTokens ? parseInt(savedTokens) : 100;
+    const savedTokens = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.TOKENS);
+    return savedTokens ? parseInt(savedTokens) : APP_CONFIG.INITIAL_TOKENS;
   });
 
   // ============================================
@@ -93,7 +98,7 @@ function App() {
 
   // Save tokens to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('weatherWizardTokens', tokens.toString());
+    localStorage.setItem(APP_CONFIG.STORAGE_KEYS.TOKENS, tokens.toString());
   }, [tokens]);
 
   useEffect(() => {

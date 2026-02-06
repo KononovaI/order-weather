@@ -1,9 +1,10 @@
 import { checkRateLimit } from '../utils/rateLimiter';
 import { ERROR_TYPES } from '../constants/errorMessages';
+import { APP_CONFIG } from '../constants/appConstants';
 
 const API_KEY = import.meta.env.OPENWEATHER_API_KEY || import.meta.env.VITE_OPENWEATHER_API_KEY;
-const BASE_URL = 'https://api.openweathermap.org/data/2.5';
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
+const BASE_URL = APP_CONFIG.API.WEATHER;
+const NOMINATIM_URL = APP_CONFIG.API.NOMINATIM;
 
 /**
  * Create a typed error for better error handling
