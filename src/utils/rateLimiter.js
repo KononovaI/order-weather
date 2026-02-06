@@ -16,13 +16,13 @@
  */
 const RATE_LIMITS = {
   weatherApi: { 
-    maxRequests: 10, 
-    windowMs: 60000,  // 10 requests per minute
+    maxRequests: 5, 
+    windowMs: 60000,  // 5 requests per minute
     name: 'Weather API'
   },
   geocoding: { 
-    maxRequests: 5, 
-    windowMs: 60000,  // 5 requests per minute
+    maxRequests: 3, 
+    windowMs: 60000,  // 3 requests per minute
     name: 'Geocoding'
   },
   mapClick: { 
