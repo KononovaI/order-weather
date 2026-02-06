@@ -41,11 +41,14 @@ function App() {
     orderStatus: '',
   });
 
-  // 4. ASYNC STATE - loading indicators and errors
+  // 4. ASYNC STATE - logical groupings for loading and errors
   const [asyncState, setAsyncState] = useState({
-    isLoading: false,
+    isWeatherLoading: false,
+    isForecastLoading: false,
+    isGeocodingLoading: false,
+    isOrderSubmitting: false,
     error: '',
-    errorType: null, // validation, api, network, etc.
+    errorType: null,
   });
 
   // 5. SIMULATION STATE - time machine mode
@@ -152,6 +155,7 @@ function App() {
 
     // Get user's geolocation
     if (navigator.geolocation) {
+      updateAsyncState({ isGeocodingLoading: true });
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
@@ -162,9 +166,15 @@ function App() {
           if (cityName) {
             updateWeatherData({ city: cityName });
           }
+          updateAsyncState({ isGeocodingLoading: false });
         },
         (error) => {
           console.error('Geolocation error:', error);
+          updateAsyncState({ 
+            isGeocodingLoading: false,
+            error: 'Geolocation access denied.',
+            errorType: 'geolocation'
+          });
         }
       );
     }
@@ -181,11 +191,19 @@ function App() {
   const handleCheckWeather = async () => {
     if (!weatherData.city) return;
     
-    updateAsyncState({ isLoading: true, error: '', errorType: null });
+    updateAsyncState({ 
+      isWeatherLoading: true, 
+      isForecastLoading: true, 
+      error: '', 
+      errorType: null 
+    });
     
     try {
-      const current = await weatherService.getCurrentWeather(weatherData.city);
-      const forecast = await weatherService.getForecast(weatherData.city);
+      // Parallel fetch for better performance
+      const [current, forecast] = await Promise.all([
+        weatherService.getCurrentWeather(weatherData.city),
+        weatherService.getForecast(weatherData.city)
+      ]);
       
       updateWeatherData({ current, forecast });
     } catch (err) {
@@ -194,16 +212,22 @@ function App() {
         errorType: err.type || 'api' 
       });
     } finally {
-      updateAsyncState({ isLoading: false });
+      updateAsyncState({ 
+        isWeatherLoading: false, 
+        isForecastLoading: false 
+      });
     }
   };
 
   const handleOrderSubmit = () => {
+    updateAsyncState({ isOrderSubmitting: true, error: '', errorType: null });
+    
     // Validate using pure function
     const validation = validateOrderForm(orderForm, tokens);
     
     if (!validation.isValid) {
       updateAsyncState({ 
+        isOrderSubmitting: false,
         error: validation.firstError.message, 
         errorType: 'validation' 
       });
@@ -216,7 +240,8 @@ function App() {
     setTokens(prev => prev - parseInt(orderForm.tokensToSpend));
 
     updateUiState({ orderPlaced: true, orderStatus: 'Order successful!' });
-
+    updateAsyncState({ isOrderSubmitting: false });
+    
     // Start fade out after 2 seconds
     setTimeout(() => {
       updateUiState({ orderStatus: 'Order successful! fade-out' });
@@ -289,7 +314,8 @@ function App() {
         currentWeather={weatherData.current}
         userLocation={weatherData.userLocation}
         showMap={uiState.showMap}
-        isLoading={asyncState.isLoading}
+        isLoading={asyncState.isWeatherLoading}
+        isGeocodingLoading={asyncState.isGeocodingLoading}
         onCityChange={(city) => updateWeatherData({ city })}
         onCheckWeather={handleCheckWeather}
         onToggleMap={() => updateUiState({ showMap: !uiState.showMap })}
@@ -299,6 +325,7 @@ function App() {
       <DateSelector 
         forecast={weatherData.forecast}
         selectedDate={orderForm.selectedDate}
+        isLoading={asyncState.isForecastLoading}
         onDateChange={(selectedDate) => updateOrderForm({ selectedDate })}
       />
 

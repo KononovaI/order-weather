@@ -2,26 +2,21 @@
  * ErrorAlert Component
  * Provides a standardized way to display errors to the user.
  */
-
-const ERROR_DETAILS = {
-  network: { title: 'Connection Error', icon: '🌐' },
-  api: { title: 'Service Error', icon: '⚠️' },
-  validation: { title: 'Invalid Input', icon: '❌' },
-  rate_limit: { title: 'Too Many Requests', icon: '⏳' },
-  geolocation: { title: 'Location Error', icon: '📍' },
-};
+import { ERROR_MESSAGES } from '../constants/errorMessages';
 
 function ErrorAlert({ type, message, onDismiss }) {
-  if (!message) return null;
-
-  const details = ERROR_DETAILS[type] || { title: 'Error', icon: '❌' };
+  // If no message is provided, try to get the default for the type
+  const errorType = type || 'api';
+  const info = ERROR_MESSAGES[errorType] || { title: 'Error', message: 'An unexpected error occurred.', icon: '❌' };
+  
+  const displayMessage = message || info.message;
 
   return (
     <div className="error-alert" role="alert">
-      <div className="error-alert-icon">{details.icon}</div>
+      <div className="error-alert-icon">{info.icon}</div>
       <div className="error-alert-content">
-        <strong>{details.title}</strong>
-        <p>{message}</p>
+        <strong>{info.title}</strong>
+        <p>{displayMessage}</p>
       </div>
       {onDismiss && (
         <button className="error-alert-close" onClick={onDismiss} aria-label="Dismiss">

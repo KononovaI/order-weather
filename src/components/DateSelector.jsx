@@ -1,9 +1,15 @@
-/**
- * DateSelector Component
- * Displays available forecast dates for selection.
- */
+import LoadingSpinner from './LoadingSpinner';
 
-function DateSelector({ forecast, selectedDate, onDateChange }) {
+function DateSelector({ forecast, selectedDate, isLoading, onDateChange }) {
+  if (isLoading) {
+    return (
+      <section className="card">
+        <h2>2. Select Date</h2>
+        <LoadingSpinner message="Fetching forecast..." />
+      </section>
+    );
+  }
+
   // Filter to show only future dates
   const getFutureForecast = () => {
     if (forecast.length === 0) return [];

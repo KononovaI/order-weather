@@ -1,18 +1,9 @@
 import { checkRateLimit } from '../utils/rateLimiter';
+import { ERROR_TYPES } from '../constants/errorMessages';
 
 const API_KEY = import.meta.env.OPENWEATHER_API_KEY || import.meta.env.VITE_OPENWEATHER_API_KEY;
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
-
-/**
- * Error types for consistent error handling
- */
-export const ERROR_TYPES = {
-  RATE_LIMIT: 'rate_limit',
-  NETWORK: 'network',
-  API: 'api',
-  NOT_FOUND: 'not_found',
-};
 
 /**
  * Create a typed error for better error handling
